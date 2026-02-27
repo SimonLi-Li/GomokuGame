@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+
+# Model checkpoints (too large for GitHub)
+checkpoints_gomoku_13x13/
+
+# macOS
+.DS_Store
+
+# Gunicorn
+gunicorn.ctl
+
+# IDE
+.vscode/
+.idea/
