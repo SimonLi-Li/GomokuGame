@@ -35,7 +35,10 @@ device = None
 def _get_device():
     global device
     if device is None:
-        if torch.cuda.is_available():
+        forced = os.environ.get('PYTORCH_DEVICE')
+        if forced:
+            device = torch.device(forced)
+        elif torch.cuda.is_available():
             device = torch.device('cuda')
         elif torch.backends.mps.is_available():
             device = torch.device('mps')
@@ -450,6 +453,7 @@ def get_ai_move(game_session, use_mcts2=False):
 if __name__ == '__main__':
     import argparse
     import subprocess
+    import platform
 
     parser = argparse.ArgumentParser(description='13x13五子棋服务器（Gunicorn）')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='监听地址')
@@ -457,6 +461,16 @@ if __name__ == '__main__':
     parser.add_argument('--threads', type=int, default=4, help='线程数')
     parser.add_argument('--timeout', type=int, default=120, help='请求超时时间（秒）')
     args = parser.parse_args()
+
+    env = os.environ.copy()
+
+    # macOS上MPS (Metal) 不支持在fork的子进程中使用，会导致SIGABRT崩溃。
+    # gunicorn的prefork worker模型会触发此问题，即使设置了
+    # OBJC_DISABLE_INITIALIZE_FORK_SAFETY也无法解决。
+    # 解决方案：在gunicorn worker中强制使用CPU推理。
+    if platform.system() == 'Darwin' and torch.backends.mps.is_available():
+        env['PYTORCH_DEVICE'] = 'cpu'
+        print("⚠️  macOS检测到MPS，但gunicorn worker中不兼容，已切换为CPU推理")
 
     cmd = [
         sys.executable, '-m', 'gunicorn',
@@ -468,7 +482,4 @@ if __name__ == '__main__':
         'hello:app'
     ]
     print(f"🚀 使用Gunicorn启动服务: http://{args.host}:{args.port} (threads={args.threads})")
-    # macOS下gunicorn fork的worker进程需要此环境变量才能使用MPS
-    env = os.environ.copy()
-    env['OBJC_DISABLE_INITIALIZE_FORK_SAFETY'] = 'YES'
     subprocess.run(cmd, env=env)
